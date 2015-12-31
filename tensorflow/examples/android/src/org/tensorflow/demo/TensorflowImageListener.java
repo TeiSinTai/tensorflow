@@ -23,10 +23,10 @@ import android.graphics.Matrix;
 import android.media.Image;
 import android.media.Image.Plane;
 import android.media.ImageReader;
-import android.media.ImageReader.OnImageAvailableListener;
-
+import android.hardware.Camera.PreviewCallback;
 import junit.framework.Assert;
-
+import android.hardware.Camera;
+import android.hardware.Camera.CameraInfo;
 import org.tensorflow.demo.env.ImageUtils;
 import org.tensorflow.demo.env.Logger;
 
@@ -35,7 +35,7 @@ import java.util.List;
 /**
  * Class that takes in preview frames and converts the image to Bitmaps to process with Tensorflow.
  */
-public class TensorflowImageListener implements OnImageAvailableListener {
+public class TensorflowImageListener implements Camera.PreviewCallback {
   private static final Logger LOGGER = new Logger();
 
   private static final boolean SAVE_PREVIEW_BITMAP = true;
@@ -49,7 +49,7 @@ public class TensorflowImageListener implements OnImageAvailableListener {
   private static final int IMAGE_MEAN = 117;
 
   // TODO(andrewharp): Get orientation programatically.
-  private final int screenRotation = 90;
+  private final int screenRotation = 270;
 
   private final TensorflowClassifier tensorflow = new TensorflowClassifier();
 
@@ -94,62 +94,28 @@ public class TensorflowImageListener implements OnImageAvailableListener {
   }
 
   @Override
-  public void onImageAvailable(final ImageReader reader) {
-    Image image = null;
-    try {
-      image = reader.acquireLatestImage();
+  public void onPreviewFrame(byte[] bytes, Camera camera) {
+	Camera.Size previewSize = camera.getParameters().getPreviewSize();
+	try {
+		// Initialize the storage bitmaps once when the resolution is known.
+	    if (previewWidth != previewSize.width || previewHeight != previewSize.height) {
+	    	previewWidth = previewSize.width;
+	        previewHeight = previewSize.height;
+	
+			LOGGER.i("Initializing at size %dx%d", previewWidth, previewHeight);
+	        rgbBytes = new int[previewWidth * previewHeight];
+	        rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Config.ARGB_8888);
+	        croppedBitmap = Bitmap.createBitmap(INPUT_SIZE, INPUT_SIZE, Config.ARGB_8888);
+		}
 
-      if (image == null) {
-        return;
-      }
+		ImageUtils.convertYUV420SPToARGB8888(bytes, rgbBytes, previewWidth, previewHeight, false);
 
-      final Plane[] planes = image.getPlanes();
-
-      // Initialize the storage bitmaps once when the resolution is known.
-      if (previewWidth != image.getWidth() || previewHeight != image.getHeight()) {
-        previewWidth = image.getWidth();
-        previewHeight = image.getHeight();
-
-        LOGGER.i("Initializing at size %dx%d", previewWidth, previewHeight);
-        rgbBytes = new int[previewWidth * previewHeight];
-        rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Config.ARGB_8888);
-        croppedBitmap = Bitmap.createBitmap(INPUT_SIZE, INPUT_SIZE, Config.ARGB_8888);
-
-        yuvBytes = new byte[planes.length][];
-        for (int i = 0; i < planes.length; ++i) {
-          yuvBytes[i] = new byte[planes[i].getBuffer().capacity()];
-        }
-      }
-
-      for (int i = 0; i < planes.length; ++i) {
-        planes[i].getBuffer().get(yuvBytes[i]);
-      }
-
-      final int yRowStride = planes[0].getRowStride();
-      final int uvRowStride = planes[1].getRowStride();
-      final int uvPixelStride = planes[1].getPixelStride();
-      ImageUtils.convertYUV420ToARGB8888(
-          yuvBytes[0],
-          yuvBytes[1],
-          yuvBytes[2],
-          rgbBytes,
-          previewWidth,
-          previewHeight,
-          yRowStride,
-          uvRowStride,
-          uvPixelStride,
-          false);
-
-      image.close();
-    } catch (final Exception e) {
-      if (image != null) {
-        image.close();
-      }
+	} catch (final Exception e) {
       LOGGER.e(e, "Exception!");
       return;
     }
 
-    rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
+	rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
 
     // For examining the actual TF input.
@@ -164,5 +130,7 @@ public class TensorflowImageListener implements OnImageAvailableListener {
       LOGGER.v("Result: " + result.getTitle());
     }
     scoreView.setResults(results);
+
+	camera.addCallbackBuffer(bytes);
   }
 }

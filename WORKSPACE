@@ -1,16 +1,16 @@
 # Uncomment and update the paths in these entries to build the Android demo.
-#android_sdk_repository(
-#    name = "androidsdk",
-#    api_level = 23,
-#    build_tools_version = "23.0.1",
-#    # Replace with path to Android SDK on your system
-#    path = "<PATH_TO_SDK>",
-#)
-#
-#android_ndk_repository(
-#    name="androidndk",
-#    path="<PATH_TO_NDK>",
-#    api_level=21)
+android_sdk_repository(
+    name = "androidsdk",
+    api_level = 20,
+    build_tools_version = "20.0.0",
+    # Replace with path to Android SDK on your system
+    path = "/hamidb/software/TADP/android-sdk-linux",
+)
+
+android_ndk_repository(
+    name="androidndk",
+    path="/hamidb/software/TADP/android-ndk-r10c",
+    api_level=20)
 
 new_http_archive(
   name = "gmock_archive",
